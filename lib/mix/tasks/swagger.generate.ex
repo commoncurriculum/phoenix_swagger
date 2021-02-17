@@ -124,12 +124,19 @@ defmodule Mix.Tasks.Phx.Swagger.Generate do
   end
 
   defp collect_paths(swagger_map, router) do
-    router.__routes__()
-    |> Enum.map(&find_swagger_path_function/1)
-    |> Enum.filter(&!is_nil(&1))
-    |> Enum.filter(&controller_function_exported?/1)
-    |> Enum.map(&get_swagger_path/1)
-    |> Enum.reduce(swagger_map, &merge_paths/2)
+    map = router.__routes__()
+      |> Enum.map(&find_swagger_path_function/1)
+      |> Enum.filter(&!is_nil(&1))
+      |> Enum.filter(&controller_function_exported?/1)
+      |> Enum.map(&get_swagger_path/1)
+      |> Enum.reduce(swagger_map, &merge_paths/2)
+
+    paths =
+      Map.to_list(map.paths)
+      |> Enum.sort_by(fn {k, _v} -> k end)
+      |> Enum.reduce(%{}, fn {k, v}, acc -> Map.put(acc, k, v) end)
+
+    %{ swagger_map | paths: paths }
   end
 
   defp find_swagger_path_function(route = %{opts: action, path: path, verb: verb}) when is_atom(action) do
@@ -216,12 +223,20 @@ defmodule Mix.Tasks.Phx.Swagger.Generate do
   end
 
   defp collect_definitions(swagger_map, router) do
-    router.__routes__()
+    defs = router.__routes__()
     |> Enum.map(&find_controller/1)
     |> Enum.uniq()
     |> Enum.filter(&function_exported?(&1, :swagger_definitions, 0))
     |> Enum.map(&apply(&1, :swagger_definitions, []))
     |> Enum.reduce(swagger_map, &merge_definitions/2)
+
+    defs =
+      Map.to_list(defs.definitions)
+      |> Enum.map(fn {k, v} -> {Atom.to_string(k), v} end)
+      |> Enum.sort_by(fn {k, _v} -> k end)
+      |> Enum.reduce(%{}, fn {k, v}, acc -> Map.put(acc, k, v) end)
+
+    %{ swagger_map | definitions: defs}
   end
 
   defp find_controller(route_map) do
